@@ -8,7 +8,7 @@ param.solverType = "fmincon";
 param.numberOfIterations = 1;
 param.numberOfVariables = 9;
 param.sampleTime = 60;
-param.numberOfHours = 167;
+param.numberOfHours = 5;
 param.tol = 0.0001;
 param.initialValuesDifferent = true;
 
@@ -16,8 +16,8 @@ param.initialValuesDifferent = true;
 param.lbLeanIn = 100;
 param.lbGasIn = 3;
 param.lbHydrogenIn = 0.1;
+param.lbMeohTankOut = 0;
 param.lbPowerInElectrolyser = 0;
-param.lbMeohOut = 0;
 param.lbPowerInBattery = 0;
 param.lbPowerBatteryElectrolyser = 0;
 param.lbPowerSold = 0;
@@ -26,12 +26,15 @@ param.lbHydrogenSold = 0;
 param.ubLeanIn = 300;
 param.ubGasIn = 12;
 param.ubHydrogenIn = 1;
+param.ubMeohTankOut = 10;
 param.ubPowerInElectrolyser = 200;
-param.ubMeohOut = 10;
-param.ubPowerInBattery = 200;
-param.ubPowerBatteryElectrolyser = 200;
-param.ubPowerSold = 100;
-param.ubHydrogenSold = 5;
+param.ubPowerInBattery = 0;
+param.ubPowerBatteryElectrolyser = 0;
+param.ubPowerSold = 0;
+param.ubHydrogenSold = 0;
+
+param.lb = [param.lbLeanIn; param.lbGasIn; param.lbHydrogenIn; param.lbMeohTankOut; param.lbPowerInElectrolyser; param.lbPowerInBattery; param.lbPowerBatteryElectrolyser; param.lbPowerSold; param.lbHydrogenSold];
+param.ub = [param.ubLeanIn; param.ubGasIn; param.ubHydrogenIn; param.ubMeohTankOut; param.ubPowerInElectrolyser; param.ubPowerInBattery; param.ubPowerBatteryElectrolyser; param.ubPowerSold; param.ubHydrogenSold];
 
 % Strom/Elektrolyseur
 param.pvScale = 700;
@@ -57,13 +60,20 @@ param.battery.initialCharge = 0.5*param.battery.capacity;
 
 % Chemische/physikalische/thermodynamische Parameter
 param.kgTokmolH2 = 1/2.016;
-param.kgTokmolMEOH = 1/32.04;
-param.kgTokmolH2O = 1/18.01528;
-param.MEOHToWaterRatio = 1.776;
+param.kgTokmolMEOHTank = 1/25.01181;
 param.R = 8.314;
 param.Tamb = 21;
 param.T0 = 273.15;
 
+% Biogas
+param.CH4.heizwert = 9.94;          % kWh/m^3
+param.CH4.brennwert = 11.07;        % kWh/m^3
+param.biogas.heizwert = [4; 7.5];   % kWh/m^3
+
+% Auslastung
+param.maxOutputElectrolyser = 2.576;
+param.maxOutputDistillation = 6.1150;
+param.maxOutputPlant = 3.2;
 
 % Einlesen der Kostendaten
 pathToFile = "C:\Users\uehmt\bwSyncShare\Max_Masterarbeit\06_Daten\02_Energie\energy-charts_Stromproduktion_und_Börsenstrompreise_in_Deutschland_in_Woche_49_2021_Excel";
@@ -75,17 +85,18 @@ finish = start + 4*param.numberOfHours;
 idx = start:4:finish;
 param.len = length(idx)-1;
 
-param.costs.energy = energyCosts(idx(1:end-1)) / 1000;   % in EUR/kwh      
-param.costs.methanol = 7535 / 1000;              % in EUR/kg     "www.statista.de"
-param.costs.hydrogen = 8;                      % in EUR/kg
-param.costs.biogas = 0;
+param.costs.energy = energyCosts(idx(1:end-1)) / 1000;      % in EUR/kWh      
+param.costs.methanol = 4;                         % in EUR/kg     "www.statista.de"      535 €/ton
+param.costs.hydrogen = 1;                                   % in EUR/kg
+param.costs.biogas = 0.2;                                   % in EUR/kWh   
 param.costs.carbondioxide = 0; 
-param.costs.methanolTank = param.costs.methanol / 2;    % in EUR/kg
-param.costs.hydrogenTank = param.costs.hydrogen;    % in EUR/kg
+param.costs.methanolTank = param.costs.methanol / 2;        % in EUR/kg
+param.costs.hydrogenTank = param.costs.hydrogen;            % in EUR/kg
 param.costs.energySoldFactor = 0.8;
-param.costs.energySold = param.costs.energy*param.costs.energySoldFactor;         % in EUR/kwh
+param.costs.energySold = param.costs.energy*param.costs.energySoldFactor;         % in EUR/kWh
 
-param.costs.operatingPointChangePlant = 0;
+
+
 
 param.ArrayAll = [param.solverType;
                     param.numberOfIterations;
@@ -99,7 +110,7 @@ param.ArrayAll = [param.solverType;
                     param.lbGasIn;
                     param.lbHydrogenIn;
                     param.lbPowerInElectrolyser;
-                    param.lbMeohOut;
+                    param.lbMeohTankOut;
                     param.lbPowerInBattery;
                     param.lbPowerBatteryElectrolyser;
                     param.lbPowerSold;
@@ -109,7 +120,7 @@ param.ArrayAll = [param.solverType;
                     param.ubGasIn;
                     param.ubHydrogenIn;
                     param.ubPowerInElectrolyser;
-                    param.ubMeohOut;
+                    param.ubMeohTankOut;
                     param.ubPowerInBattery;
                     param.ubPowerBatteryElectrolyser;
                     param.ubPowerSold;
@@ -134,10 +145,7 @@ param.ArrayAll = [param.solverType;
                     param.battery.auxiliaryPower;
                     param.battery.initialCharge;
                     
-                    param.kgTokmolH2
-                    param.kgTokmolMEOH;
-                    param.kgTokmolH2O;
-                    param.MEOHToWaterRatio;
+                    param.kgTokmolH2;
                     param.R;
                     param.Tamb;
                     param.T0;
@@ -150,14 +158,13 @@ param.ArrayAll = [param.solverType;
                     param.costs.carbondioxide; 
                     param.costs.methanolTank;    
                     param.costs.hydrogenTank;  
-                    param.costs.energySoldFactor;
-                    param.costs.operatingPointChangePlant];
+                    param.costs.energySoldFactor];
 
 param.validationArray = [param.lbLeanIn;
                     param.lbGasIn;
                     param.lbHydrogenIn;
                     param.lbPowerInElectrolyser;
-                    param.lbMeohOut;
+                    param.lbMeohTankOut;
                     param.lbPowerInBattery;
                     param.lbPowerBatteryElectrolyser;
                     param.lbPowerSold;
@@ -167,7 +174,7 @@ param.validationArray = [param.lbLeanIn;
                     param.ubGasIn;
                     param.ubHydrogenIn;
                     param.ubPowerInElectrolyser;
-                    param.ubMeohOut;
+                    param.ubMeohTankOut;
                     param.ubPowerInBattery;
                     param.ubPowerBatteryElectrolyser;
                     param.ubPowerSold;
@@ -196,5 +203,4 @@ param.validationArray = [param.lbLeanIn;
                     param.costs.carbondioxide; 
                     param.costs.methanolTank;    
                     param.costs.hydrogenTank;  
-                    param.costs.energySoldFactor;
-                    param.costs.operatingPointChangePlant];
+                    param.costs.energySoldFactor];

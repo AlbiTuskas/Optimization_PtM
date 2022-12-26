@@ -1,4 +1,4 @@
-function [] = visualization(sol,len,result,param)
+function [] = visualization(sol,len,result,costs,param)
 
 close all
 
@@ -41,7 +41,7 @@ xlabel("time in h");
 ylabel("pressure in bar");
 
 figure
-plot(X,result.hydrogenProdElectrolyser/param.kgTokmolH2,X,sol.hydrogenSold,X,sol.hydrogenIn);
+plot(X,result.hydrogenProdElectrolyser*(1/param.kgTokmolH2),X,sol.hydrogenSold,X,sol.hydrogenIn);
 title("H2-Production");
 xlabel("time in h");
 ylabel("mass flow hydrogen in kg/h");
@@ -61,7 +61,7 @@ xlabel("time in h");
 ylabel("pressure in bar");
 
 figure
-plot(X,result.methanolTankIn + result.waterTankIn, X, sol.meohOut)
+plot(X,result.moleFlowMEOHTankIn*(1/param.kgTokmolH2), X, sol.meohTankOut)
 title("MEOH-Tank");
 xlabel("time in h");
 ylabel("mass flow in kg/h");
@@ -74,10 +74,23 @@ title("Methanol-Production");
 xlabel("time in h");
 ylabel("mass flow methanol in kg/h");
 
+% Biogas
+figure
+plot(X,result.massFlowBiogas)
+title("Biogas-Production");
+xlabel("time in h");
+ylabel("mass flow biogas in kg/h");
+
 % Kosten
 figure
-plot(X,result.methanolProdcution.*param.costs.methanol,X,sol.hydrogenSold.*param.costs.hydrogen,X,sol.powerSold.*param.costs.energy*0.5,X,result.powerInPlant.*param.costs.energy,X,sol.powerInBattery.*param.costs.energy,X,sol.powerInElectrolyser.*param.costs.energy)
+plot(X,costs.methanol,...
+        X,costs.biogas,...
+        X,costs.hydrogenSold,...
+        X,costs.powerSold,...
+        X,costs.powerInElectrolyser,...
+        X,costs.powerInPlant.*param.costs.energy,...
+        X,costs.powerInBattery.*param.costs.energy);
 title("Costs");
 xlabel("time in h");
 ylabel("Euro");
-legend("methanol", "hydrogen", "power", "power needed plant", "power needed battery", "power needed electrolyser");
+legend("methanol", "biogas", "hydrogen", "power sold", "power needed electrolyser", "power needed plant", "power needed battery");

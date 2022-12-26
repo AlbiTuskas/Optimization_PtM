@@ -3,22 +3,26 @@ function y = objfcn(x,len,mdl,param)
 leanIn(:,1) = x(1:len);
 gasIn(:,1) = x(len+1:2*len);
 hydrogenIn(:,1) = x(2*len+1:3*len);
-powerInElectrolyser(:,1) = x(3*len+1:4*len);
-meohOut(:,1) = x(4*len+1:5*len);
+meohTankOut(:,1) = x(3*len+1:4*len);
+powerInElectrolyser(:,1) = x(4*len+1:5*len);
 powerInBattery(:,1) = x(5*len+1:6*len);
 powerBatteryElectrolyser(:,1) = x(6*len+1:7*len);
 powerSold(:,1) = x(7*len+1:8*len);
 hydrogenSold(:,1) = x(8*len+1:9*len);
 
-mdlMassFlowMEOHTankIn = mdl{1};
-mdlMassFlowH2OTankIn = mdl{2};
-mdlPowerRequired1 = mdl{3};
-mdlMassFlowMEOHProd = mdl{6};
-mdlPowerRequired2 = mdl{7};
-mdlElectrolyser = mdl{8};
+mdlPowerRequiredABSDESSYNT = mdl{1};
+mdlPowerRequiredDIS = mdl{2};
+mdlMassFlowBiogasOut = mdl{3};
+mdlDensityBiogasOut = mdl{5};
+mdlMoleFracCH4BiogasOut = mdl{6};
+mdlMoleFlowMEOHTankIn = mdl{8};
+mdlMassFlowMEOHProd = mdl{10};
+mdlMoleFlowMEOHTankOut = mdl{11};
+mdlElectrolyser = mdl{end};
+
 
 %% Power
-powerInPlant = (predict(mdlPowerRequired1,[leanIn, gasIn, hydrogenIn]) + predict(mdlPowerRequired2,meohOut)) / 1000;
+powerInPlant = (predict(mdlPowerRequiredABSDESSYNT,[leanIn, gasIn, hydrogenIn]) + predict(mdlPowerRequiredDIS,meohTankOut)) / 1000;
 
 %% Electrolyser
 powerInNominal = (powerInElectrolyser + param.battery.efficiency*powerBatteryElectrolyser) / 100;
@@ -55,28 +59,33 @@ for i = 2:len
 end
 
 %% Methanol Tank
-methanolTankIn = predict(mdlMassFlowMEOHTankIn, [leanIn,gasIn,hydrogenIn]);
-waterTankIn = predict(mdlMassFlowH2OTankIn, [leanIn,gasIn,hydrogenIn]);
+moleFlowMEOHTankIn = predict(mdlMoleFlowMEOHTankIn, [leanIn,gasIn,hydrogenIn]);
+%moleFlowMEOHTankOut = predict(mdlMoleFlowMEOHTankOut, meohTankOut);
 
 tankMEOHInitialFilling = param.tankMEOHInitialPressure*10^5*param.tankMEOHVolume / (param.R*(param.Tamb + param.T0)*1000);
 tankMEOHFilling = zeros(len,1);
 tankMEOHFilling(1) = tankMEOHInitialFilling;
 for i = 2:len
-    tankMEOHFilling(i) = tankMEOHFilling(i-1) + (methanolTankIn(i)*param.kgTokmolMEOH + waterTankIn(i)*param.kgTokmolH2O)/60*param.sampleTime - (param.kgTokmolMEOH*(meohOut(i) - meohOut(i)/(1+param.MEOHToWaterRatio)) + param.kgTokmolH2O*meohOut(i)/(1+param.MEOHToWaterRatio))/60*param.sampleTime;
+    tankMEOHFilling(i) = tankMEOHFilling(i-1) + moleFlowMEOHTankIn(i)/60*param.sampleTime - meohTankOut(i)*param.kgTokmolMEOHTank/60*param.sampleTime;
 end
 
+%% Biogas
+massFlowBiogas = predict(mdlMassFlowBiogasOut, [leanIn,gasIn,hydrogenIn]);
+densityBiogas = predict(mdlDensityBiogasOut, [leanIn,gasIn,hydrogenIn]);
+moleFractionCH4Biogas = predict(mdlMoleFracCH4BiogasOut, [leanIn,gasIn,hydrogenIn]);
+
+%% Methanol
+massFlowMethanolProd = predict(mdlMassFlowMEOHProd,meohTankOut);
+
 %% Objective Function
-y = - sum(predict(mdlMassFlowMEOHProd,meohOut))*param.costs.methanol...
+y = - sum(massFlowMethanolProd)*param.costs.methanol...
+    - sum(massFlowBiogas./densityBiogas.*moleFractionCH4Biogas*param.CH4.brennwert)*param.costs.biogas...
     + sum(powerInPlant.*param.costs.energy)...
     - sum(hydrogenSold*param.costs.hydrogen)...
     + sum(powerInElectrolyser.*param.costs.energy)...
     + sum(powerInBattery.*param.costs.energy)...
     - sum(powerSold.*param.costs.energySold)...
-    - ((((tankMEOHFilling(end) - tankMEOHFilling(1)) - (tankMEOHFilling(end) - tankMEOHFilling(1))/(1 + param.MEOHToWaterRatio))*(1/param.kgTokmolMEOH)) + ((tankMEOHFilling(end) - tankMEOHFilling(1))/(1 + param.MEOHToWaterRatio)*(1/param.kgTokmolH2O)))*param.costs.methanolTank...
+    - (tankMEOHFilling(end) - tankMEOHFilling(1))*(1/param.kgTokmolMEOHTank)*param.costs.methanolTank...
     - (tankH2Filling(end) - tankH2Filling(1))*(1/param.kgTokmolH2)*param.costs.hydrogenTank...
     - (batteryChargeValue(end) - batteryChargeValue(1));
 
-
-% y = y + sum(leanInChange)*param.costs.operatingPointChangePlant...
-%       + sum(gasInChange)*param.costs.operatingPointChangePlant...
-%       + sum(hydrogenInChange)*param.costs.operatingPointChangePlant;
